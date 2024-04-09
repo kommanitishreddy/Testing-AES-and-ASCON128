@@ -67,20 +67,17 @@ void initialization(uint64_t state[5], uint64_t key[2]) {
        state[i] ^= zero_key[i];
    }
 }
-
-
 void finalization(uint64_t state[5], uint64_t key[2]) {
    state[1] ^= key[0];
    state[2] ^= key[1];
    
 }
-
 void encrypt(uint64_t state[5], int length, uint64_t plaintext_block[], uint64_t ciphertext_block[]) {
    ciphertext_block[0] = plaintext_block[0] ^ state[0];
    for (int i = 1; i < length; i++){
       p(state, 6);
       ciphertext_block[i] = plaintext_block[i] ^ state[0];
-      //printf("ciphertext block %016llx", ciphertext_block[i]);
+      printf("ciphertext block %016llx", ciphertext_block[i]);
       state[0] = ciphertext_block[i];
    }
 }
@@ -91,7 +88,7 @@ int main() {
    uint64_t key[2] = { 0x1234567890abcdef, 0x1234567890abcdef};
    uint64_t IV = 0x80400c0600000000;
     // File handling
-  FILE *input_file = fopen("input.txt", "rb");
+  FILE *input_file = fopen("input1.txt", "rb");
   FILE *output_file = fopen("output.txt", "wb"); 
 
   if (input_file == NULL || output_file == NULL) {
@@ -99,14 +96,9 @@ int main() {
       return 1;
   }
   // Read plaintext from file in blocks
-  const int BLOCK_SIZE = 64; 
+  const int BLOCK_SIZE = 1; 
   uint64_t plaintext_block[BLOCK_SIZE];
   uint64_t ciphertext_block[BLOCK_SIZE];
-   //encryption
-  int bytes_read;
-  while ((bytes_read = fread(plaintext_block, sizeof(uint64_t), BLOCK_SIZE, input_file)) > 0) {
-   // printf("Read %d blocks from input file.\n", bytes_read);
-
      //initialize state
    state[0] = IV;
    state[1] = key[0];
@@ -115,18 +107,18 @@ int main() {
    state[4] = nonce[1];
    initialization(state,key);
    //print_state(state);
-      // Process each block (encryption)
-      encrypt(state, bytes_read, plaintext_block, ciphertext_block);
-      for (int i = 0; i < bytes_read; i++) {
-    fwrite(ciphertext_block, sizeof(uint64_t), bytes_read, output_file);
-    }
-      
-  fclose(input_file);
-  fclose(output_file);
-  finalization(state, key);
+   //encryption
+  int bytes_read;
+  while ((bytes_read = fread(plaintext_block, sizeof(uint64_t), BLOCK_SIZE, input_file)) > 0) {
+   // printf("Read %d blocks from input file.\n", bytes_read);
+   // Process each block (encryption)
+   encrypt(state, bytes_read, plaintext_block, ciphertext_block);
+   fwrite(ciphertext_block, sizeof(uint64_t), bytes_read, output_file);
+   }
+   finalization(state, key);
    state[3] ^= key[0]; 
    state[4] ^= key[1];
    printf("tag: %016llx %016llx\n", state[3], state[4]);
-   return 0;
-   }
+   fclose(input_file);
+  fclose(output_file);
 }
