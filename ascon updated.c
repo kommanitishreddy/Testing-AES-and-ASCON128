@@ -1,24 +1,21 @@
 #include <stdio.h>
 #include <stdint.h>
+#include <string.h>
 #include <stdlib.h>
 
 
-
 uint64_t state[5] = { 0 }, t[5] = { 0 };
-uint64_t constants[16] = {0xf0, 0xe1, 0xd2, 0xc3, 0xb4, 0xa5, 0x96, 0x87, 0x78, 0x69, 0x5a, 0x4b, 0x3c, 0x2d, 0x1e, 0x0f};
-
-void print_state(uint64_t state[5]){
+uint64_t constants[12] = {0xf0, 0xe1, 0xd2, 0xc3, 0xb4, 0xa5, 0x96, 0x87, 0x78, 0x69, 0x5a, 0x4b};
+/*void print_state(uint64_t state[5]){
    for(int i = 0; i < 5; i++){
       printf("%016llx\n", state[i]);
    } 
-}
-
+}*/
 uint64_t rotate(uint64_t x, int l) {
    uint64_t temp;
    temp = (x >> l) ^ (x << (64 - l));
    return temp;
 }
-
 void add_constant(uint64_t state[5], int i, int a) {
    state[2] = state[2] ^ constants[12 - a + i];
 }
@@ -61,64 +58,154 @@ void initialization(uint64_t state[5], uint64_t key[2]) {
    p(state, 12);
    state[3] ^= key[0];
    state[4] ^= key[1];
-   // Correctly implement the zero-key XOR operation
-   uint64_t zero_key[5] = {0, 0, 0, key[0], key[1]}; // Assuming a 128-bit key
-   for (int i = 0; i < 5; i++) {
-       state[i] ^= zero_key[i];
-   }
 }
 void finalization(uint64_t state[5], uint64_t key[2]) {
    state[1] ^= key[0];
    state[2] ^= key[1];
-   
+   p(state, 12);
+   state[3] ^= key[0];
+   state[4] ^= key[1];
 }
+
 void encrypt(uint64_t state[5], int length, uint64_t plaintext_block[], uint64_t ciphertext_block[]) {
    ciphertext_block[0] = plaintext_block[0] ^ state[0];
+   state[0] = ciphertext_block[0];
    for (int i = 1; i < length; i++){
       p(state, 6);
       ciphertext_block[i] = plaintext_block[i] ^ state[0];
-      printf("ciphertext block %016llx", ciphertext_block[i]);
       state[0] = ciphertext_block[i];
    }
 }
+void encryptFile(const char* inputPath, const char* outputPath, uint64_t* key, uint64_t* nonce, uint64_t IV) {
+    FILE *input_file = fopen(inputPath, "rb");
+    if (input_file == NULL) {
+        printf("Error opening input file!\n");
+        return;
+    }
+    fseek(input_file, 0, SEEK_END);
+    long file_size = ftell(input_file);
+    fseek(input_file, 0, SEEK_SET);
+    size_t buffer_size = ((file_size + 7) / 8) * 8;
+    uint64_t *buffer = (uint64_t*)malloc(buffer_size);
+   
+    memset(buffer, 0, buffer_size);
+    fread(buffer, 1, file_size, input_file);
+    fclose(input_file);
+    //apply padding
+    if (file_size % 8 != 0) {
+        unsigned char *padding_start = ((unsigned char*)buffer) + file_size;
+        *padding_start = 0x80;
+    }
+    state[0] = IV;
+    state[1] = key[0];
+    state[2] = key[1];
+    state[3] = nonce[0];
+    state[4] = nonce[1];
+    initialization(state, key);
+    size_t num_blocks = buffer_size / sizeof(uint64_t);
+    uint64_t *ciphertext_block = (uint64_t*)malloc(buffer_size);
+   
+    for (size_t i = 0; i < num_blocks; i++) {
+        encrypt(state, 1, &buffer[i], &ciphertext_block[i]);
+    }
+    finalization(state, key);
+    printf("Tage: %016llx %016llx\n", state[3], state[4]);
+    FILE *output_file = fopen(outputPath, "wb");
+    if (output_file == NULL) {
+        printf("Error opening output file!\n");
+    } else {
+        fwrite(ciphertext_block, buffer_size, 1, output_file);
+        fclose(output_file);
+    }
+    free(buffer);
+    free(ciphertext_block);
+}
+void decrypt(uint64_t state[5], int length, uint64_t ciphertext_block[], uint64_t decrypt_block[]){
+   decrypt_block[0] = ciphertext_block[0] ^ state[0];
+   state[0] = ciphertext_block[0];
+   for (int i = 1; i < length; i++){
+      p(state, 6);
+      decrypt_block[i] = ciphertext_block[i] ^ state[0];
+      state[0] = ciphertext_block[i];
+   }
+}
+void remove_padding(uint64_t *buffer, size_t *buffer_size) {
+    unsigned char *byte_buffer = (unsigned char *)buffer;
+    // Iterate backwards over the buffer to find the padding start
+    for (ssize_t i = (*buffer_size) - 1; i >= 0; i--) {
+        if (byte_buffer[i] == 0x80) { // Padding start found
+            *buffer_size = i; // Adjust buffer size to exclude padding
+            return;
+        }
+    }
+}
+void decryptFile(const char* cipherPath, const char* decryptPath, uint64_t* key, uint64_t* nonce, uint64_t IV) {
+    // Open the input file
+    FILE *input_file = fopen(cipherPath, "rb");
+    if (input_file == NULL) {
+        printf("Error opening input file!\n");
+        return;
+    }
+    // Determine file size
+    fseek(input_file, 0, SEEK_END);
+    long file_size = ftell(input_file);
+    fseek(input_file, 0, SEEK_SET);
 
-int main() {
-   // initialize nonce, key and IV
-   uint64_t nonce[2] = {0x1234567890abcdef, 0x1234567890abcdef };
-   uint64_t key[2] = { 0x1234567890abcdef, 0x1234567890abcdef};
-   uint64_t IV = 0x80400c0600000000;
-    // File handling
-  FILE *input_file = fopen("input1.txt", "rb");
-  FILE *output_file = fopen("output.txt", "wb"); 
+    // Allocate buffer for the entire ciphertext
+    uint64_t *buffer = (uint64_t*)malloc(file_size);
 
-  if (input_file == NULL || output_file == NULL) {
-      printf("Error opening files!\n");
-      return 1;
-  }
-  // Read plaintext from file in blocks
-  const int BLOCK_SIZE = 1; 
-  uint64_t plaintext_block[BLOCK_SIZE];
-  uint64_t ciphertext_block[BLOCK_SIZE];
-     //initialize state
+    // Read file into buffer
+    fread(buffer, 1, file_size, input_file);
+    fclose(input_file);
+
+    //initialize state 
    state[0] = IV;
    state[1] = key[0];
    state[2] = key[1];
    state[3] = nonce[0];
    state[4] = nonce[1];
    initialization(state,key);
-   //print_state(state);
-   //encryption
-  int bytes_read;
-  while ((bytes_read = fread(plaintext_block, sizeof(uint64_t), BLOCK_SIZE, input_file)) > 0) {
-   // printf("Read %d blocks from input file.\n", bytes_read);
-   // Process each block (encryption)
-   encrypt(state, bytes_read, plaintext_block, ciphertext_block);
-   fwrite(ciphertext_block, sizeof(uint64_t), bytes_read, output_file);
-   }
-   finalization(state, key);
-   state[3] ^= key[0]; 
-   state[4] ^= key[1];
-   printf("tag: %016llx %016llx\n", state[3], state[4]);
-   fclose(input_file);
-  fclose(output_file);
+
+    // Decrypt each 64-bit block
+    size_t num_blocks = file_size / sizeof(uint64_t);
+    uint64_t *plaintext_block = (uint64_t*)malloc(file_size); 
+
+    for (size_t i = 0; i < num_blocks; i++) {
+        decrypt(state, 1, &buffer[i], &plaintext_block[i]);
+    }
+
+    // Finalization
+    finalization(state, key);
+    printf("tagd: %016llx %016llx\n", state[3], state[4]);
+
+    // Remove padding
+    size_t plaintext_size = file_size;
+    remove_padding(plaintext_block, &plaintext_size);
+
+    // Write decrypted plaintext to file, excluding padding
+    FILE *output_file = fopen(decryptPath, "wb");
+    if (output_file == NULL) {
+        printf("Error opening output file!\n");
+    } else {
+        fwrite(plaintext_block, 1, plaintext_size, output_file);
+        fclose(output_file);
+    }
+    // Cleanup
+    free(buffer);
+    free(plaintext_block);
+}
+
+
+int main() {
+    // Initialize nonce, key, and IV
+    uint64_t nonce[2] = {0x1234567890abcdef, 0x1234567890abcdef};
+    uint64_t key[2] = {0xf740ac80eb71906d, 0xded937e44f74ddcc};
+    uint64_t IV = 0x80400c0600000000;
+
+    const char* inputPath = "input1.txt"; 
+    const char* outputPath = "output.txt";
+    const char* cipherPath = "output.txt";
+    const char* decryptPath = "decrypt.txt"; 
+    encryptFile(inputPath, outputPath, key, nonce, IV);
+    decryptFile(cipherPath, decryptPath, key, nonce, IV);
 }
