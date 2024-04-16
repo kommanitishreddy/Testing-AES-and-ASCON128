@@ -2,23 +2,22 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
-#include <inttypes.h>
+#include <time.h>
+
+
 
 uint64_t state[5] = { 0 }, t[5] = { 0 };
-uint64_t constants[16] = {0xf0, 0xe1, 0xd2, 0xc3, 0xb4, 0xa5, 0x96, 0x87, 0x78, 0x69, 0x5a, 0x4b, 0x3c, 0x2d, 0x1e, 0x0f};
-
-void print_state(uint64_t state[5]){
+uint64_t constants[12] = {0xf0, 0xe1, 0xd2, 0xc3, 0xb4, 0xa5, 0x96, 0x87, 0x78, 0x69, 0x5a, 0x4b};
+/*void print_state(uint64_t state[5]){
    for(int i = 0; i < 5; i++){
       printf("%016llx\n", state[i]);
    } 
-}
-
+}*/
 uint64_t rotate(uint64_t x, int l) {
    uint64_t temp;
    temp = (x >> l) ^ (x << (64 - l));
    return temp;
 }
-
 void add_constant(uint64_t state[5], int i, int a) {
    state[2] = state[2] ^ constants[12 - a + i];
 }
@@ -61,121 +60,80 @@ void initialization(uint64_t state[5], uint64_t key[2]) {
    p(state, 12);
    state[3] ^= key[0];
    state[4] ^= key[1];
-   uint64_t zero_key[5] = {0, 0, 0, key[0], key[1]}; 
-   for (int i = 0; i < 5; i++) {
-       state[i] ^= zero_key[i];
-   }
 }
-
 void finalization(uint64_t state[5], uint64_t key[2]) {
    state[1] ^= key[0];
    state[2] ^= key[1];
-   
+   p(state, 12);
+   state[3] ^= key[0];
+   state[4] ^= key[1];
 }
-void string_to_binary_chunks(const char* str, uint64_t** binary_chunks, int* length) {
-    int str_len = strlen(str);
-    *length = (str_len + 7) / 8; // Determine how many 64-bit chunks are needed, with padding.
-    
-    // Allocate memory for the binary chunks.
-    *binary_chunks = (uint64_t*)malloc(*length * sizeof(uint64_t));
-    memset(*binary_chunks, 0, *length * sizeof(uint64_t)); // Initialize with zeros for padding.
-    
-    // Copy the string into the allocated 64-bit chunks.
-    for (int i = 0; i < str_len; i++) {
-        ((char*)(*binary_chunks))[i] = str[i];
-    }
-}
-void encrypt(uint64_t state[5], int length, uint64_t plaintext[], uint64_t ciphertext[]) {
-   ciphertext[0] = plaintext[0] ^ state[0];
-   for (int i = 1; i < length; i++){
+
+void encrypt(uint64_t state[5], int length, uint64_t plaintext_block[], uint64_t ciphertext_block[]) {
+  // ciphertext_block[0] = plaintext_block[0] ^ state[0];
+   //state[0] = ciphertext_block[0];
+   for (int i = 0; i < length; i++){
+      ciphertext_block[i] = plaintext_block[i] ^ state[0];
+      state[0] = ciphertext_block[i];
       p(state, 6);
-      ciphertext[i] = plaintext[i] ^ state[0];
-      state[0] = ciphertext[i];
    }
+}
+void encryptBuffer(uint64_t *buffer, size_t buffer_size, uint64_t *key, uint64_t *nonce, uint64_t IV) {
+    state[0] = IV;
+    state[1] = key[0];
+    state[2] = key[1];
+    state[3] = nonce[0];
+    state[4] = nonce[1];
+    initialization(state, key);
+    
+    size_t num_blocks = (buffer_size + 7) / 8; // calculate number of 64-bit blocks
+    size_t padded_size = num_blocks * 8;       // calculate padded buffer size
+    uint64_t *ciphertext_block = (uint64_t*)malloc(padded_size);
+
+    for (size_t i = 0; i < num_blocks; i++) {
+        encrypt(state, 1, &buffer[i], &ciphertext_block[i]);
+    }
+    finalization(state, key);
+    printf("Tag: %016llx %016llx\n", state[3], state[4]);
 }
 
 int main() {
-   // initialize nonce, key and IV
-   uint64_t nonce[2] = {0x1234567890abcdef, 0x1234567890abcdef };
-   uint64_t key[2] = { 0x1234567890abcdef, 0x1234567890abcdef};
-   uint64_t IV = 0x80400c0600000000;
-    uint64_t* binary_chunks;
-    int length;
-    FILE *inputFile, *outputFile;
-    char *inputFileName = "/Users/nitishreddyk/Desktop/ascontest/input.txt"; 
-    char *outputFileName = "/Users/nitishreddyk/Desktop/ascontest/output.txt"; 
-    
-    // Open the input file for reading
-    inputFile = fopen(inputFileName, "r");
-    if (inputFile == NULL) {
-        perror("Failed to open input file");
-        return 1;
+    // Initialize nonce, key, and IV
+    uint64_t nonce[2] = {0x1234567890abcdef, 0x1234567890abcdef};
+    uint64_t key[2] = {0xf740ac80eb71906d, 0xded937e44f74ddcc};
+    uint64_t IV = 0x80400c0600000000;
+    //const char* inputPath = "input3.txt"; 
+    //const char* outputPath = "output.txt";
+    clock_t start_time, end_time;
+    double elapsed_time;
+    struct timespec start, end;
+double elapsed;
+    int repetitions = 1;
+   size_t buffer_size = 10000; // Desired buffer size
+    size_t padded_size = ((buffer_size + 7) / 8) * 8; // Adjusted for alignment
+    uint64_t *buffer = (uint64_t*)malloc(padded_size);
+    memset(buffer, 0xAA, padded_size); // Initialize buffer 
+    // Apply padding
+    if (buffer_size % 8 != 0) {
+        unsigned char *padding_start = ((unsigned char*)buffer) + buffer_size;
+        *padding_start = 0x80; // Mark the start of padding
     }
 
-    // Determine the size of the file
-    fseek(inputFile, 0, SEEK_END);
-    long fileSize = ftell(inputFile);
-    fseek(inputFile, 0, SEEK_SET);
-
-    // Allocate memory for reading the file
-    char *plaintext = malloc(fileSize + 1);
-    if (plaintext == NULL) {
-        perror("Memory allocation failed for plaintext");
-        fclose(inputFile);
-        return 1;
+    start_time = clock();
+    for (int i = 0; i < repetitions; i++) {
+        encryptBuffer(buffer, padded_size, key, nonce, IV);
     }
+    end_time = clock();
 
-    // Read the file into the plaintext buffer
-    size_t readSize = fread(plaintext, 1, fileSize, inputFile);
-    plaintext[readSize] = '\0'; // Ensure null-termination
-    fclose(inputFile);
-
-// Convert string to binary chunks.
-    string_to_binary_chunks(plaintext, &binary_chunks, &length);
-    
-    // Proceed with your encryption setup...
-    uint64_t* ciphertext = (uint64_t*)malloc(length * sizeof(uint64_t));
-if (ciphertext == NULL) {
-    fprintf(stderr, "Memory allocation failed\n");
-    return 1; 
+    elapsed_time = ((double) (end_time - start_time)) / CLOCKS_PER_SEC;
+    printf("Encryption time (seconds): %f\n", elapsed_time);
+    // Calculate elapsed time in seconds
+    // Define CPU frequency in Hz
+    double cpu_frequency = 3490000000; // 3.49 GHz
+    // Calculate total cycles
+    double total_cycles = elapsed_time * cpu_frequency;
+    // Calculate cycles per byte
+    double cycles_per_byte = total_cycles / buffer_size;
+    printf("Cycles per byte: %f\n", cycles_per_byte);
+    free(buffer);
 }
-    
-   //encryption
-   //initialize state
-   state[0] = IV;
-   state[1] = key[0];
-   state[2] = key[1];
-   state[3] = nonce[0];
-   state[4] = nonce[1];
-   initialization(state,key);
-   print_state(state);
-    encrypt(state, length, binary_chunks, ciphertext);
-  // Open the output file for writing
-    outputFile = fopen(outputFileName, "w");
-    if (outputFile == NULL) {
-        perror("Failed to open output file");
-        free(plaintext); 
-        return 1;
-    }
-    fprintf(outputFile, "Ciphertext: \n");
-    for (int i = 0; i < length; i++) {
-        fprintf(outputFile, "%016" PRIx64 " ", ciphertext[i]);
-    }
-    fprintf(outputFile, "\n");
-
-    fclose(outputFile);
-
-   finalization(state, key);
-   state[3] ^= key[0]; 
-   state[4] ^= key[1];
-   printf("tag: %016llx %016llx\n", state[3], state[4]);
-  
-    free(plaintext);
-    free(binary_chunks);
-    free(ciphertext);
- 
-}
-
-
-        
-   
