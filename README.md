@@ -8,4 +8,14 @@ We noted the time taken for encryption and detailed the user and system times se
 Calculating Throughput: 
 The throughput, measured in million bytes per second was determined by dividing the data size by the encryption time. This calculation allows for a comparison of the efficiency of different algorithms.
 
-The Results are uploaded in a spreed sheet names asconaes2.xlsx
+
+Benchmark Objective:
+The goal of the benchmark is to assess how ASCON and AES encryption techniques perform across data sizes. Performance is evaluated based on encryption time and throughput which measures the speed at which data can be encrypted per second.
+Methodology Considerations:
+•	The benchmarks were conducted using the hardware and software setup to maintain consistency.
+•	Time measurements are recorded in Milliseconds with columns, for user and system time.
+•	Throughput is quantified in millions of bytes per second indicating the efficiency of each algorithm.
+•	User time signifies the duration that the CPU devotes to executing user related tasks while system time represents the period allocated to system/kernel operations.
+
+The Results are uploaded in a spreed sheet names asconaes2.xlsx and the following Charts are made availble in Charts folder.
+
