@@ -17,5 +17,5 @@ Methodology Considerations:
 •	Throughput is quantified in millions of bytes per second indicating the efficiency of each algorithm.
 •	User time signifies the duration that the CPU devotes to executing user related tasks while system time represents the period allocated to system/kernel operations.
 
-The Results are uploaded in a spreed sheet names asconaes2.xlsx and the following Charts are made availble in Charts folder.
+The Results are uploaded in a spreed sheet names asconaes2.xlsx and the following Charts are made availble in Charts.zip.
 
