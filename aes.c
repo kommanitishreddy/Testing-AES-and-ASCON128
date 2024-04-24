@@ -28,14 +28,14 @@ int main(void)
     /* File pointers for input and output files */
     FILE *inputFile, *outputFile;
     /* Open the input file */
-    inputFile = fopen("/Users/nitishreddyk/Desktop/aes/input.txt", "r");
+    inputFile = fopen("/.../input.txt", "r");//fill with input.txt location path
     if (inputFile == NULL)
     {
         perror("Error opening input file\n");
         return 1;
     }
     /* Open the output file */
-    outputFile = fopen("/Users/nitishreddyk/Desktop/aes/output.txt", "wb");
+    outputFile = fopen("/.../output.txt", "wb");// fill with output.txt location path
     if (outputFile == NULL)
     {
         fprintf(stderr, "Error opening output file\n");
