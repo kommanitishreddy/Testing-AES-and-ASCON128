@@ -200,7 +200,7 @@ int main() {
     struct rusage usage_start, usage_end;
     double user_time, system_time,total_time;
 
-    const char* inputPath = "input1.txt"; 
+    const char* inputPath = "input.txt"; 
     const char* outputPath = "output.txt";
     const char* cipherPath = "output.txt";
     const char* decryptPath = "decrypt.txt"; 
