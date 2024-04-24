@@ -3,16 +3,13 @@
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
+#include <sys/resource.h>
 
 
 
 uint64_t state[5] = { 0 }, t[5] = { 0 };
 uint64_t constants[12] = {0xf0, 0xe1, 0xd2, 0xc3, 0xb4, 0xa5, 0x96, 0x87, 0x78, 0x69, 0x5a, 0x4b};
-/*void print_state(uint64_t state[5]){
-   for(int i = 0; i < 5; i++){
-      printf("%016llx\n", state[i]);
-   } 
-}*/
+
 uint64_t rotate(uint64_t x, int l) {
    uint64_t temp;
    temp = (x >> l) ^ (x << (64 - l));
@@ -104,12 +101,10 @@ int main() {
     uint64_t IV = 0x80400c0600000000;
     //const char* inputPath = "input3.txt"; 
     //const char* outputPath = "output.txt";
-    clock_t start_time, end_time;
-    double elapsed_time;
-    struct timespec start, end;
-double elapsed;
+    struct rusage usage_start, usage_end;
+    double user_time, system_time,total_time, bytes_per_second;
     int repetitions = 1;
-   size_t buffer_size = 10000; // Desired buffer size
+   size_t buffer_size = 10000000000; // Desired buffer size
     size_t padded_size = ((buffer_size + 7) / 8) * 8; // Adjusted for alignment
     uint64_t *buffer = (uint64_t*)malloc(padded_size);
     memset(buffer, 0xAA, padded_size); // Initialize buffer 
@@ -119,21 +114,23 @@ double elapsed;
         *padding_start = 0x80; // Mark the start of padding
     }
 
-    start_time = clock();
+    getrusage(RUSAGE_SELF, &usage_start);
     for (int i = 0; i < repetitions; i++) {
         encryptBuffer(buffer, padded_size, key, nonce, IV);
     }
-    end_time = clock();
+    getrusage(RUSAGE_SELF, &usage_end);
 
-    elapsed_time = ((double) (end_time - start_time)) / CLOCKS_PER_SEC;
-    printf("Encryption time (seconds): %f\n", elapsed_time);
-    // Calculate elapsed time in seconds
-    // Define CPU frequency in Hz
-    double cpu_frequency = 3490000000; // 3.49 GHz
-    // Calculate total cycles
-    double total_cycles = elapsed_time * cpu_frequency;
-    // Calculate cycles per byte
-    double cycles_per_byte = total_cycles / buffer_size;
-    printf("Cycles per byte: %f\n", cycles_per_byte);
+     // Calculate elapsed user and system time in seconds
+    user_time = (usage_end.ru_utime.tv_sec - usage_start.ru_utime.tv_sec) +
+                (usage_end.ru_utime.tv_usec - usage_start.ru_utime.tv_usec) / 1000000.0;
+    system_time = (usage_end.ru_stime.tv_sec - usage_start.ru_stime.tv_sec) +
+                  (usage_end.ru_stime.tv_usec - usage_start.ru_stime.tv_usec) / 1000000.0;
+   total_time = user_time + system_time;  // Total time in seconds
+   bytes_per_second = buffer_size / total_time;  // Throughput in bytes per second
+
+    printf("Total Time (seconds): %f\n", total_time);
+    printf("Bytes per second: %f\n", bytes_per_second);
+    printf("User Time (seconds): %f\n", user_time);
+    printf("System Time (seconds): %f\n", system_time);
     free(buffer);
 }
