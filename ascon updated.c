@@ -2,15 +2,12 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/resource.h>
 
 
 uint64_t state[5] = { 0 }, t[5] = { 0 };
 uint64_t constants[12] = {0xf0, 0xe1, 0xd2, 0xc3, 0xb4, 0xa5, 0x96, 0x87, 0x78, 0x69, 0x5a, 0x4b};
-/*void print_state(uint64_t state[5]){
-   for(int i = 0; i < 5; i++){
-      printf("%016llx\n", state[i]);
-   } 
-}*/
+
 uint64_t rotate(uint64_t x, int l) {
    uint64_t temp;
    temp = (x >> l) ^ (x << (64 - l));
@@ -68,12 +65,11 @@ void finalization(uint64_t state[5], uint64_t key[2]) {
 }
 
 void encrypt(uint64_t state[5], int length, uint64_t plaintext_block[], uint64_t ciphertext_block[]) {
-   ciphertext_block[0] = plaintext_block[0] ^ state[0];
-   state[0] = ciphertext_block[0];
+  
    for (int i = 1; i < length; i++){
-      p(state, 6);
       ciphertext_block[i] = plaintext_block[i] ^ state[0];
       state[0] = ciphertext_block[i];
+      p(state, 6);
    }
 }
 void encryptFile(const char* inputPath, const char* outputPath, uint64_t* key, uint64_t* nonce, uint64_t IV) {
@@ -121,12 +117,12 @@ void encryptFile(const char* inputPath, const char* outputPath, uint64_t* key, u
     free(ciphertext_block);
 }
 void decrypt(uint64_t state[5], int length, uint64_t ciphertext_block[], uint64_t decrypt_block[]){
-   decrypt_block[0] = ciphertext_block[0] ^ state[0];
-   state[0] = ciphertext_block[0];
+
    for (int i = 1; i < length; i++){
-      p(state, 6);
+     
       decrypt_block[i] = ciphertext_block[i] ^ state[0];
       state[0] = ciphertext_block[i];
+      p(state, 6);
    }
 }
 void remove_padding(uint64_t *buffer, size_t *buffer_size) {
@@ -201,11 +197,25 @@ int main() {
     uint64_t nonce[2] = {0x1234567890abcdef, 0x1234567890abcdef};
     uint64_t key[2] = {0xf740ac80eb71906d, 0xded937e44f74ddcc};
     uint64_t IV = 0x80400c0600000000;
+    struct rusage usage_start, usage_end;
+    double user_time, system_time,total_time;
 
     const char* inputPath = "input1.txt"; 
     const char* outputPath = "output.txt";
     const char* cipherPath = "output.txt";
     const char* decryptPath = "decrypt.txt"; 
+    getrusage(RUSAGE_SELF, &usage_start);
     encryptFile(inputPath, outputPath, key, nonce, IV);
+    getrusage(RUSAGE_SELF, &usage_end);
     decryptFile(cipherPath, decryptPath, key, nonce, IV);
+
+     // Calculate elapsed user and system time in seconds
+    user_time = (usage_end.ru_utime.tv_sec - usage_start.ru_utime.tv_sec) +
+                (usage_end.ru_utime.tv_usec - usage_start.ru_utime.tv_usec) / 1000000.0;
+    system_time = (usage_end.ru_stime.tv_sec - usage_start.ru_stime.tv_sec) +
+                  (usage_end.ru_stime.tv_usec - usage_start.ru_stime.tv_usec) / 1000000.0;
+   total_time = user_time + system_time;  // Total time in seconds
+    printf("Total Time (seconds): %f\n", total_time);
+    printf("User Time (seconds): %f\n", user_time);
+    printf("System Time (seconds): %f\n", system_time);
 }
